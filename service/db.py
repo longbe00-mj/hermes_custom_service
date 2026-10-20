@@ -120,6 +120,27 @@ class Audit(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class ModelProvider(Base):
+    __tablename__ = 'model_providers'
+    id: Mapped[str] = mapped_column(String(24), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    models: Mapped[list] = mapped_column(JSON, default=list)
+    key_cipher: Mapped[str | None] = mapped_column(String(8192))
+    workspace: Mapped[str] = mapped_column(String(128), default='')
+
+
+class ModelPolicy(Base):
+    __tablename__ = 'model_policy'
+    id: Mapped[str] = mapped_column(String(24), primary_key=True, default='global')
+    default_model: Mapped[str] = mapped_column(String(128))
+
+
+class ModelPreference(Base):
+    __tablename__ = 'model_preferences'
+    user_id: Mapped[str] = mapped_column(ForeignKey('users.id'), primary_key=True)
+    model: Mapped[str] = mapped_column(String(128))
+
+
 class Attempt(Base):
     __tablename__ = 'auth_attempts'
     key: Mapped[str] = mapped_column(String(64), primary_key=True)

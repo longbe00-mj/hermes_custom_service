@@ -52,7 +52,7 @@ schema version 1은 명시적인 migrate 명령과 PostgreSQL advisory lock으�
 
 클라이언트가 보낸 tenant/profile/address로 라우팅하지 않는다. 중앙의 인증 주체로 본인 런타임을 정하고, 서버가 발급한 짧은 bridge credential로 runtime auth plugin에 연결한다. plugin은 자신의 owner와 중앙 계정의 일치를 확인한다.
 
-WS는 중앙의 30초 일회용 ticket을 소비한 뒤 런타임 ticket을 별도로 발급받는다. HTTP는 헤더·응답 쿠키를 필터링하고 backend 인증을 중앙에서 주입한다. 대화 WebSocket·PTY·pub만 중계한다. 원본 runtime은 외부 포트를 publish하지 않는다.
+WS는 중앙의 30초 일회용 ticket을 소비한 뒤 런타임 ticket을 별도로 발급받는다. HTTP는 헤더·응답 쿠키를 필터링하고 backend 인증을 중앙에서 주입한다. 대화 WebSocket·PTY·pub·events를 중계한다. 원본 runtime은 외부 포트를 publish하지 않는다.
 
 웹 작업은 기존 Dashboard의 `/chat`을 재사용한다. 터미널과 파일은 서버 컨테이너의 개인 home/workspace에서 처리한다. Desktop의 모든 버전·native bridge·OS 파일 기능을 보장하는 것은 아니며 실제 client QA를 별도로 수행해야 한다.
 
@@ -107,3 +107,7 @@ backup은 모든 runtime을 정지하고 edge·platform·manager를 잠시 정�
 관리자 OTP 정책: 로컬 초기 설정은 `admin_otp_required: false`로 ID/PW만 사용합니다. `config.yaml`에서 true로 변경하고 platform을 재시작하면 OTP가 필수가 됩니다. 설정 누락 시 기본은 필수입니다. 가입 신청·계정 복구 신청은 로그인 화면의 버튼으로 각각 이동합니다.
 
 관리자 승인과 이메일 확인의 순서는 자유롭다. 이메일 미확인 계정도 승인·재활성화할 수 있지만, 런타임·GUI·모델 사용은 두 조건이 모두 완료된 후에만 허용한다. 관리자 승인이 이메일 소유 확인 상태를 변경하지 않는다.
+
+## 중앙 모델 프로바이더 관리 확장
+
+`model_providers`는 공급자 활성 여부, 허용 모델, 암호화 API 키를 저장하고 `model_policy`는 전체 기본 모델, `model_preferences`는 사용자 선택을 보관한다. 저장은 관리자 권한과 CSRF 검증을 요구한다. 런타임의 `central-default` 요청은 사용자 선택 또는 전체 기본 모델로 해석하며, 실제 ID 요청도 매번 같은 허용 목록을 검사한다. 모델 키는 런타임에 전달하지 않는다. OpenAI·Anthropic API 키 연결을 구현했으며 개인 구독 OAuth 중앙 공유는 활성화하지 않았다. 상세 계약과 제약은 [중앙 모델 프로바이더 관리](model-providers.md)를 참조한다.

@@ -41,11 +41,7 @@ bootstrap 명령은 관리자 비밀번호를 대화형으로 받고 authenticat
 
 ## 모델 설정
 
-`.secrets/provider_api_key`에 사용할 공급자의 API 키를 넣고 `config.yaml`의 `provider_base_url`, `allowed_models`, `default_model`을 설정하세요. 기본 예시는 OpenAI 호환 Chat Completions입니다. 실제 key는 Git에 포함하지 않습니다.
-
-```powershell
-docker compose up -d --force-recreate platform
-```
+관리자 화면의 **모델 프로바이더 관리**에서 OpenAI 또는 Anthropic API 키와 허용 모델, 기본 모델을 저장하세요. 저장 후 새 요청에 즉시 적용되며 재시작은 필요하지 않습니다. 실제 키는 Git에 포함하지 않습니다. 기존 `.secrets/provider_api_key`와 `config.yaml`의 `allowed_models`, `default_model`은 첫 관리자 설정 저장 전의 OpenAI 연결 호환용입니다. 공급자 URL은 공식 호스트로 고정합니다.
 
 키가 없어도 계정·승인·GUI·런타임을 검증할 수 있습니다. 실제 모델 호출은 명시적으로 503을 반환합니다. 가짜 모델 응답을 제공하지 않습니다.
 
@@ -121,3 +117,7 @@ AWS는 Terraform으로 VPC·ALB/TLS·EC2·EBS·IAM·ECR·secret 참조·로그·
 이 버전은 사내 소규모용 로컬 파일럿입니다. 공유 Docker host와 중앙 Manager는 신뢰 영역이며 외부 불특정 고객의 강한 격리·HA를 보장하지 않습니다. browser/도구의 직접 인터넷 접근은 제한되며 HTTP proxy를 사용하는 backend 설정이 필요합니다. 인터넷 서비스로 공개하기 전에 TLS·실제 SMTP·자원 부하·egress·dependency 보안 검토가 필요합니다.
 
 관리자 OTP 정책: 로컬 초기 설정은 `admin_otp_required: false`로 ID/PW만 사용합니다. `config.yaml`에서 true로 변경하고 platform을 재시작하면 OTP가 필수가 됩니다. 설정 누락 시 기본은 필수입니다. 가입 신청·계정 복구 신청은 로그인 화면의 버튼으로 각각 이동합니다.
+
+## 관리자 모델 설정
+
+관리자로 로그인한 뒤 **모델 프로바이더 관리**에서 OpenAI·Anthropic API 키와 허용 모델을 저장하세요. 사용자는 포털에서 허용 모델만 선택할 수 있고, 중앙 모델 API도 같은 목록을 검증합니다. 기존 환경은 중지·시작 후 새 세션을 여세요. OAuth의 중앙 공유는 공급자 승인 범위가 확인되지 않아 활성화하지 않았습니다. [구현 범위와 OAuth 검토](docs/model-providers.md)를 참고하세요.

@@ -19,8 +19,8 @@ router = APIRouter()
 _HOP = {'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer',
         'transfer-encoding', 'upgrade', 'content-length', 'set-cookie'}
 # Central policy stays outside the tenant-controlled config. Reading provider keys is never exposed.
-_DENIED = ('/api/env', '/api/config/env', '/api/auth/', '/api/mcp/oauth')
-_MANAGED = ('/api/config', '/api/gateway', '/api/plugins', '/api/update', '/api/profiles')
+_DENIED = ('/api/env', '/api/config/env', '/api/auth/', '/api/mcp/oauth', '/api/oauth', '/api/providers', '/api/settings/providers')
+_MANAGED = ('/api/config', '/api/gateway', '/api/plugins', '/api/update', '/api/profiles', '/api/model')
 
 
 def live_session(db, sid):
@@ -128,7 +128,7 @@ async def http_proxy(path: str, request: Request):
 
 @router.websocket('/{path:path}')
 async def websocket_proxy(socket: WebSocket, path: str):
-    if path not in ('api/ws', 'api/pty', 'api/pub'):
+    if path not in ('api/ws', 'api/pty', 'api/pub', 'api/events'):
         await socket.close(code=1008)
         return
     origin = socket.headers.get('origin')

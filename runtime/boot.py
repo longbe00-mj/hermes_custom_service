@@ -13,7 +13,7 @@ shutil.copy('/service/runtime/plugin.yaml', plugin / 'plugin.yaml')
 config_path = home / 'config.yaml'
 if not config_path.exists():
     cfg = {
-        'model': {'provider': 'custom', 'default': os.environ['DEFAULT_MODEL'],
+        'model': {'provider': 'custom', 'default': 'central-default',
                   'base_url': 'http://control:8000/v1', 'key_env': 'RUNTIME_TOKEN'},
         'dashboard': {'public_url': 'http://hc-user-' + os.environ['OWNER_ID'] + ':9119'},
         'plugins': {'enabled': ['central-auth']},
@@ -21,5 +21,10 @@ if not config_path.exists():
         'browser': {'backend': 'local'},
     }
     config_path.write_text(json.dumps(cfg))
+# Bind the main model to the centrally selected alias on process startup only.
+from ruamel.yaml import YAML
+cfg = YAML(typ='safe').load(config_path.read_text()) or {}
+cfg['model'] = {'provider': 'custom', 'default': 'central-default', 'base_url': 'http://control:8000/v1', 'key_env': 'RUNTIME_TOKEN'}
+config_path.write_text(json.dumps(cfg))
 (home / 'workspace').mkdir(exist_ok=True)
 os.execv('/opt/hermes/bin/hermes', ['hermes', 'dashboard', '--host', '0.0.0.0', '--port', '9119', '--no-open'])

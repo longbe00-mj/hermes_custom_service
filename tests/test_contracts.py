@@ -5,11 +5,11 @@ import uuid
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, delete, select, text
 from sqlalchemy.engine import make_url
 
 from service import accounts
-from service.db import Base, Identity, LocalCredential, LoginSession, Space, Usage, User, factory
+from service.db import Base, Identity, LocalCredential, LoginSession, Space, Usage, User, ModelProvider, ModelPolicy, ModelPreference, factory
 from service.security import challenge, digest, hasher, password_ok, runtime_token, token
 from service.settings import config, database_url
 
@@ -43,6 +43,10 @@ class Contracts(unittest.TestCase):
 
     def tearDown(self):
         self.client.close()
+        with factory()() as db:
+            for table in (ModelPreference, ModelPolicy, ModelProvider):
+                db.execute(delete(table))
+            db.commit()
 
     def user(self, status='active', verified=True):
         name = 'u' + uuid.uuid4().hex[:14]
@@ -250,6 +254,104 @@ class Contracts(unittest.TestCase):
         self.assertEqual(len(calls), config()['max_model_parallel'])
         for call in calls:
             settle(call)
+
+    def provider_admin(self):
+        user, _, credentials = self.user()
+        with factory()() as db:
+            db.get(User, user.id).admin = True
+            db.commit()
+        return {'Authorization': 'Bearer ' + credentials['access_token']}
+
+    def test_provider_admin_permissions_and_encrypted_key(self):
+        _, _, credentials = self.user()
+        denied = self.client.get('/platform/api/admin/model-providers', headers={'Authorization': 'Bearer ' + credentials['access_token']})
+        self.assertEqual(denied.status_code, 403)
+        headers = self.provider_admin()
+        body = {'enabled': True, 'models': ['managed-gpt'], 'default_model': 'managed-gpt', 'api_key': 'sk-test-secret'}
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/openai', json=body,
+                                        headers={'Authorization': 'Bearer ' + credentials['access_token']}).status_code, 403)
+        response = self.client.put('/platform/api/admin/model-providers/openai', json=body, headers=headers)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('sk-test-secret', response.text)
+        listing = self.client.get('/platform/api/admin/model-providers', headers=headers)
+        self.assertNotIn('sk-test-secret', listing.text)
+        import httpx
+        from service import providers
+        real_client = httpx.AsyncClient
+        def transport(request):
+            self.assertEqual(str(request.url), 'https://api.openai.com/v1/models')
+            self.assertEqual(request.headers['Authorization'], 'Bearer sk-test-secret')
+            return httpx.Response(200, json={'data': [{'id': 'managed-gpt'}]})
+        with patch.object(providers.httpx, 'AsyncClient', side_effect=lambda **kw: real_client(transport=httpx.MockTransport(transport), **kw)):
+            tested = self.client.post('/platform/api/admin/model-providers/openai/test', json={}, headers=headers)
+        self.assertEqual(tested.status_code, 200)
+        self.assertEqual(tested.json()['models'], ['managed-gpt'])
+        from service.providers import vault
+        with factory()() as db:
+            row = db.get(ModelProvider, 'openai')
+            self.assertNotIn('sk-test-secret', row.key_cipher)
+            self.assertEqual(vault().decrypt(row.key_cipher.encode()).decode(), 'sk-test-secret')
+        body['api_key'] = None
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/openai', json=body, headers=headers).status_code, 200)
+        with factory()() as db:
+            self.assertTrue(db.get(ModelProvider, 'openai').key_cipher)
+
+    def test_model_allowlist_selection_and_disable(self):
+        headers = self.provider_admin()
+        body = {'enabled': True, 'models': ['managed-gpt'], 'default_model': 'managed-gpt', 'api_key': 'sk-test'}
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/openai', json=body, headers=headers).status_code, 200)
+        user, _, credentials = self.user()
+        user_headers = {'Authorization': 'Bearer ' + credentials['access_token']}
+        runtime_headers = {'Authorization': 'Bearer ' + runtime_token(user.id)}
+        listing = self.client.get('/v1/models', headers=runtime_headers)
+        self.assertEqual([m['id'] for m in listing.json()['data']], ['managed-gpt'])
+        self.assertEqual(self.client.put('/platform/api/models/selection', json={'model': 'forbidden'}, headers=user_headers).status_code, 403)
+        self.assertEqual(self.client.put('/platform/api/models/selection', json={'model': 'managed-gpt'}, headers=user_headers).status_code, 200)
+        self.assertEqual(self.client.post('/v1/chat/completions', json={'model': 'forbidden'}, headers=runtime_headers).status_code, 403)
+        body['enabled'] = False
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/openai', json=body, headers=headers).status_code, 200)
+        self.assertEqual(self.client.get('/v1/models', headers=runtime_headers).json()['data'], [])
+        self.assertEqual(self.client.post('/v1/chat/completions', json={'model': 'managed-gpt'}, headers=runtime_headers).status_code, 403)
+        self.assertEqual(self.client.post('/v1/chat/completions', json={'model': 'central-default'}, headers=runtime_headers).status_code, 403)
+
+    def test_anthropic_routing_alias_tools_and_usage(self):
+        import json
+        import httpx
+        from service import models
+        headers = self.provider_admin()
+        body = {'enabled': True, 'models': ['claude-test'], 'default_model': 'claude-test', 'api_key': 'sk-ant-test', 'workspace': 'workspace_test'}
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/anthropic', json=body, headers=headers).status_code, 200)
+        user, _, credentials = self.user()
+        self.assertEqual(self.client.put('/platform/api/models/selection', json={'model': 'claude-test'}, headers={'Authorization': 'Bearer ' + credentials['access_token']}).status_code, 200)
+        real_client = httpx.AsyncClient
+        tool = {'type': 'function', 'function': {'name': 'echo', 'parameters': {'type': 'object'}}}
+        def transport(request):
+            self.assertEqual(str(request.url), 'https://api.anthropic.com/v1/chat/completions')
+            self.assertEqual(request.headers['Authorization'], 'Bearer sk-ant-test')
+            self.assertEqual(request.headers['anthropic-workspace-id'], 'workspace_test')
+            payload = json.loads(request.content)
+            self.assertEqual(payload['model'], 'claude-test')
+            self.assertEqual(payload['tools'], [tool])
+            return httpx.Response(200, json={'choices': [{'message': {'role': 'assistant', 'tool_calls': [{'id': 'call1', 'type': 'function', 'function': {'name': 'echo', 'arguments': '{}'}}]}}], 'usage': {'total_tokens': 9}})
+        with patch.object(models.httpx, 'AsyncClient', side_effect=lambda **kw: real_client(transport=httpx.MockTransport(transport), **kw)):
+            response = self.client.post('/v1/chat/completions', headers={'Authorization': 'Bearer ' + runtime_token(user.id)},
+                                        json={'model': 'central-default', 'messages': [{'role': 'user', 'content': 'hi'}], 'tools': [tool]})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['choices'][0]['message']['tool_calls'][0]['function']['name'], 'echo')
+        with factory()() as db:
+            usage = db.scalar(select(Usage).where(Usage.user_id == user.id))
+            self.assertEqual((usage.tokens, usage.inflight), (9, 0))
+
+    def test_invalid_provider_settings_do_not_change_policy(self):
+        headers = self.provider_admin()
+        body = {'enabled': True, 'models': ['bad/model'], 'default_model': 'bad/model', 'api_key': 'sk-test'}
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/openai', json=body, headers=headers).status_code, 422)
+        body.update(models=['valid'], default_model='not-allowed')
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/openai', json=body, headers=headers).status_code, 422)
+        body.update(default_model='valid', api_key='sk-ant-oat-subscription-token')
+        self.assertEqual(self.client.put('/platform/api/admin/model-providers/anthropic', json=body, headers=headers).status_code, 422)
+        with factory()() as db:
+            self.assertIsNone(db.get(ModelProvider, 'anthropic'))
 
     def test_provider_stream_usage_settles_reservation(self):
         import httpx

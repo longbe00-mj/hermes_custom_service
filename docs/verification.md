@@ -53,3 +53,10 @@ contract suite는 별도 DB를 사용하고, live smoke는 자신이 만든 임�
 Linux의 빠른 연속 backup/restore에서 container start와 HTTP readiness 사이의 race도 발견해 bounded health polling을 추가했다. 복원 전에 Manager readiness를 확인하고, backup 종료 시 Manager와 platform의 HTTP readiness까지 기다린다.
 
 HTTP/RPC 계약 통과를 모든 GUI·provider·보안 계약의 검증으로 확대하지 않는다. 초기 배포 대상은 로컬 사내 파일럿이다.
+
+## 중앙 모델 관리 추가 검증 (2026-10-20)
+
+- 계약 테스트 24개 통과: 관리자 API 권한, API 키 암호화·조회 비노출·빈 값 유지, 연결 테스트, 사용자 모델 선택, 미허용·비활성 모델 거부, Anthropic 호스트·workspace 헤더·도구 전달·usage 정산 포함.
+- 최종 수정 이미지로 live smoke 통과: 실제 Hermes GUI, runtime provider endpoint/scoped key, WS/PTY, 브라우저 실행, 로그아웃 취소, 파일 중지·시작 보존, 정지 계정 차단. 부팅 YAML 의존성과 이미지 교체 시 비교 문제를 수정한 뒤 재검증했다.
+- 실제 longbe00 포털에서 관리자 허용 모델 선택 UI 표시를 DOM으로 확인했다. 관리자 폼 전체 브라우저 저장·외부 연결은 미검증이다.
+- 공급자 자격증명이 없어 실제 유료 모델 생성, OAuth 동의·갱신은 실행하지 않았다. OAuth 중앙 공유는 현재 활성 기능이 아니다.

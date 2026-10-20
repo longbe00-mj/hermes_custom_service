@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from service.db import ModelCall, Usage, User, factory, now
 from service.security import runtime_token
 from service.settings import config, secret
+from service.providers import ENDPOINTS, allowed, selected_model, vault
 
 router = APIRouter()
 
@@ -28,7 +29,8 @@ def principal(db, request):
 def catalog(request: Request):
     with factory()() as db:
         principal(db, request)
-    return {'object': 'list', 'data': [{'id': m, 'object': 'model'} for m in config()['allowed_models']]}
+        models = list(allowed(db))
+    return {'object': 'list', 'data': [{'id': m, 'object': 'model'} for m in models]}
 
 
 def reserve(db, owner, amount):
@@ -78,11 +80,22 @@ async def completion(request: Request):
         body = json.loads(raw)
     except ValueError as exc:
         raise HTTPException(400, 'Invalid JSON') from exc
-    if not isinstance(body, dict) or body.get('model') not in config()['allowed_models']:
-        raise HTTPException(403, 'Model is not allowed')
-    key = secret('provider_api_key')
+    if not isinstance(body, dict):
+        raise HTTPException(400, 'Expected JSON object')
+    with factory()() as db:
+        owner = principal(db, request).id
+        model = selected_model(db, owner) if body.get('model') == 'central-default' else body.get('model')
+        if not isinstance(model, str) or model not in allowed(db):
+            raise HTTPException(403, 'Model is not allowed')
+        provider = allowed(db)[model]
+        key = vault().decrypt(provider.key_cipher.encode()).decode() if provider.key_cipher else (secret('provider_api_key') if provider.id == 'openai' else '')
+        endpoint = ENDPOINTS[provider.id]
+        workspace = provider.workspace
     if not key:
         raise HTTPException(503, '관리자가 모델 API 키를 설정해야 합니다.')
+    if body.get('n', 1) != 1:
+        raise HTTPException(422, 'Only one completion per request is supported')
+    body['model'] = model
     cap = body.get('max_completion_tokens', body.get('max_tokens', 4096))
     if not isinstance(cap, int) or isinstance(cap, bool) or not 1 <= cap <= 16384:
         raise HTTPException(422, 'Output token cap must be 1..16384')
@@ -93,12 +106,12 @@ async def completion(request: Request):
     # Byte-based reservation is conservative for text, not a provider billing quote.
     amount = len(raw) + cap + 1024
     with factory()() as db:
-        owner = principal(db, request).id
+        principal(db, request)
         call_id = reserve(db, owner, amount)
     client = httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10), trust_env=False)
     try:
-        upstream = await client.send(client.build_request('POST', config()['provider_base_url'].rstrip('/') + '/chat/completions',
-                                    json=body, headers={'Authorization': 'Bearer ' + key}), stream=True)
+        upstream = await client.send(client.build_request('POST', endpoint + '/chat/completions',
+                                    json=body, headers={'Authorization': 'Bearer ' + key, **({'anthropic-workspace-id': workspace} if workspace else {})}), stream=True)
     except httpx.HTTPError as exc:
         await client.aclose()
         settle(call_id, failed=True)

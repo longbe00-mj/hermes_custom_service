@@ -105,6 +105,10 @@ def start(owner: str):
             connect_services(cli, cli.networks.get(name + '-net'))
             if container.status == 'running':
                 return report(container, owner)
+            # Upgrade stopped runtimes on explicit start; the labeled data volume survives.
+            if container.attrs['Image'] != cli.images.get(cfg['runtime_image']).id:
+                container.remove()
+                container = None
         running = cli.containers.list(filters={'label': [f'{DEPLOY}={DEPLOYMENT}', LABEL]})
         if len(running) >= cfg['max_active_runtimes']:
             raise HTTPException(429, '활성 환경 한도입니다. 다른 작업이 끝난 뒤 다시 시도하세요.')

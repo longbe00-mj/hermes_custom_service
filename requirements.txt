@@ -9,3 +9,4 @@ docker>=7.1,<8
 PyYAML>=6.0,<7
 pyotp>=2.9,<3
 python-multipart>=0.0.20,<1
+cryptography>=46.0.3,<47

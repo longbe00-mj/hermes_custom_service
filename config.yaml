@@ -14,7 +14,6 @@ runtime_memory: 4g
 runtime_cpus: 2
 daily_token_limit: 1000000
 max_model_parallel: 2
-provider_base_url: https://api.openai.com/v1
 allowed_models:
   - gpt-4.1-mini
 default_model: gpt-4.1-mini

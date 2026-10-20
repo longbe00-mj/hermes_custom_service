@@ -79,8 +79,10 @@ from service.auth_routes import router as auth_router
 from service.operations import router as operations_router
 from service.models import router as models_router
 from service.proxy import router as proxy_router
+from service.providers import router as providers_router
 
 app.include_router(auth_router)
 app.include_router(operations_router)
 app.include_router(models_router)
+app.include_router(providers_router)
 app.include_router(proxy_router)
