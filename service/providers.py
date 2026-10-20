@@ -32,7 +32,7 @@ def entries(db):
     rows = list(db.scalars(select(ModelProvider).order_by(ModelProvider.id)))
     if not rows:
         # Preserve operator config on upgrade until the first explicit admin save.
-        return [ModelProvider(id='openai', enabled=True, models=config()['allowed_models'], workspace='')]
+        return [ModelProvider(id='openai', enabled=bool(secret('provider_api_key')), models=config()['allowed_models'], workspace='')]
     return rows
 
 
@@ -121,7 +121,7 @@ def save_provider(provider: str, body: ProviderInput, request: Request):
         admin, _, _ = accounts.require(request, db, active=True, admin=True)
         db.execute(text('SELECT pg_advisory_xact_lock(58231002)'))
         if not list(db.scalars(select(ModelProvider))):
-            db.add(ModelProvider(id='openai', enabled=True, models=config()['allowed_models'], workspace=''))
+            db.add(ModelProvider(id='openai', enabled=bool(secret('provider_api_key')), models=config()['allowed_models'], workspace=''))
             db.flush()
         row = db.get(ModelProvider, provider)
         if not row:

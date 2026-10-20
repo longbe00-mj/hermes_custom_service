@@ -298,6 +298,8 @@ class Contracts(unittest.TestCase):
 
     def test_model_allowlist_selection_and_disable(self):
         headers = self.provider_admin()
+        with patch('service.providers.secret', return_value=''):
+            self.assertEqual(self.client.get('/platform/api/models', headers=headers).json()['models'], [])
         body = {'enabled': True, 'models': ['managed-gpt'], 'default_model': 'managed-gpt', 'api_key': 'sk-test'}
         self.assertEqual(self.client.put('/platform/api/admin/model-providers/openai', json=body, headers=headers).status_code, 200)
         user, _, credentials = self.user()
@@ -364,7 +366,7 @@ class Contracts(unittest.TestCase):
             return httpx.Response(200, text=payload, headers={'content-type': 'text/event-stream'})
         def provider_client(**kwargs):
             return real_client(transport=httpx.MockTransport(transport), **kwargs)
-        with patch.object(models, 'secret', return_value='test-provider-key'), patch.object(models.httpx, 'AsyncClient', side_effect=provider_client):
+        with patch.object(models, 'secret', return_value='test-provider-key'), patch('service.providers.secret', return_value='test-provider-key'), patch.object(models.httpx, 'AsyncClient', side_effect=provider_client):
             result = self.client.post('/v1/chat/completions', headers={'Authorization': 'Bearer ' + runtime_token(user.id)},
                                       json={'model': config()['default_model'], 'messages': [{'role': 'user', 'content': 'hi'}], 'stream': True})
         self.assertEqual(result.status_code, 200)
