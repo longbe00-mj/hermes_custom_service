@@ -5,6 +5,8 @@ import json
 import re
 import shutil
 import tarfile
+import threading
+import time
 from pathlib import Path, PurePosixPath
 
 import docker
@@ -56,21 +58,45 @@ def helper(cli, volume, readonly=True):
 
 
 def quiesce(cli):
+    wait_ready(config()['manager_url'] + '/healthz')
     response = httpx.post(config()['manager_url'] + '/drain', headers={'x-manager-key': secret('manager_key')},
                           timeout=120, trust_env=False)
     response.raise_for_status()
     stopped = []
-    for name in ('edge', 'platform', 'manager'):
-        container = service(cli, name)
-        if container.status == 'running':
-            container.stop(timeout=10)
-            stopped.append(container)
+    try:
+        for name in ('edge', 'platform', 'manager'):
+            container = service(cli, name)
+            if container.status == 'running':
+                container.stop(timeout=10)
+                stopped.append(container)
+    except Exception:
+        restart(stopped)
+        raise
     return stopped
 
 
 def restart(stopped):
     for container in reversed(stopped):
         container.start()
+    for container in reversed(stopped):
+        name = container.labels.get('com.docker.compose.service')
+        if name == 'manager':
+            wait_ready(config()['manager_url'] + '/healthz')
+        elif name == 'platform':
+            wait_ready('http://platform:8000/healthz')
+
+
+def wait_ready(url):
+    """Container start is not service readiness; required before an immediate restore/drain."""
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        try:
+            if httpx.get(url, timeout=2, trust_env=False).status_code == 200:
+                return
+        except httpx.HTTPError:
+            pass
+        threading.Event().wait(0.25)
+    raise RuntimeError('Service did not become ready after restart')
 
 
 def backup(cli, root):

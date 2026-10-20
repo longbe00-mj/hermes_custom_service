@@ -140,6 +140,8 @@ def main():
         probe = runtime.exec_run(['/opt/hermes/.venv/bin/python', '-c',
             "import sys,os,pathlib; sys.path.insert(0,'/opt/hermes'); import hermes_bootstrap; from hermes_cli.runtime_provider import resolve_runtime_provider; r=resolve_runtime_provider(); assert r['base_url']=='http://control:8000/v1','wrong model endpoint'; assert r['api_key']==os.environ['RUNTIME_TOKEN'],'wrong runtime credential'; pathlib.Path('/opt/data/workspace/smoke-marker').write_text('durable')"])
         assert probe.exit_code == 0, probe.output.decode(errors='replace')[-500:]
+        expect(client.get('/api/profiles', headers=headers(pa)))
+        expect(client.post('/api/profiles', headers=headers(pa), json={}), 403)
         probe = runtime.exec_run(['/opt/hermes/.venv/bin/python', '-c',
             "import sys,json; sys.path.insert(0,'/opt/hermes'); import hermes_bootstrap; from tools.browser_tool import browser_navigate; r=json.loads(browser_navigate('https://example.com',task_id='smoke-browser')); assert r.get('success'),str(r)[:400]"])
         assert probe.exit_code == 0, probe.output.decode(errors='replace')[-600:]

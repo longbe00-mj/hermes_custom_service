@@ -19,8 +19,8 @@ router = APIRouter()
 _HOP = {'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer',
         'transfer-encoding', 'upgrade', 'content-length', 'set-cookie'}
 # Central policy stays outside the tenant-controlled config. Reading provider keys is never exposed.
-_DENIED = ('/api/env', '/api/config/env', '/api/gateway', '/api/plugins', '/api/update', '/api/auth/',
-           '/api/profiles', '/api/mcp/oauth')
+_DENIED = ('/api/env', '/api/config/env', '/api/auth/', '/api/mcp/oauth')
+_MANAGED = ('/api/config', '/api/gateway', '/api/plugins', '/api/update', '/api/profiles')
 
 
 def live_session(db, sid):
@@ -81,8 +81,8 @@ async def runtime_base(owner):
 def permitted(path, method):
     if path.startswith(_DENIED):
         raise HTTPException(403, '중앙 관리 기능입니다. 포털을 사용하세요.')
-    if path.startswith('/api/config') and method not in ('GET', 'HEAD'):
-        raise HTTPException(403, '모델 정책은 중앙에서 관리합니다.')
+    if path.startswith(_MANAGED) and method not in ('GET', 'HEAD'):
+        raise HTTPException(403, '환경 정책은 중앙에서 관리합니다.')
 
 
 @router.api_route('/{path:path}', methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'])
