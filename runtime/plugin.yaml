@@ -1,0 +1,5 @@
+name: central-auth
+version: 0.1.0
+description: Tenant-bound central service authentication
+author: Hermes Custom Service
+kind: backend

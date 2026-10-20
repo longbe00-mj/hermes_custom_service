@@ -1,0 +1,97 @@
+name: hermes-custom
+services:
+  edge:
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    ports: ["127.0.0.1:8088:80"]
+    volumes: ["./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+    depends_on:
+      platform: {condition: service_healthy}
+    restart: unless-stopped
+    networks: [frontend]
+  db:
+    image: postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412
+    environment:
+      POSTGRES_USER: hermes
+      POSTGRES_DB: hermes
+      POSTGRES_PASSWORD_FILE: /run/secrets/database_password
+    secrets: [database_password]
+    volumes: ["postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hermes -d hermes"]
+      interval: 3s
+      retries: 30
+    restart: unless-stopped
+    networks: [control]
+  migrate:
+    image: hermes-custom-platform:0.1.0
+    command: ["python", "-m", "service.cli", "migrate"]
+    secrets: [database_password, app_key, manager_key]
+    volumes: ["./config.yaml:/app/config.yaml:ro"]
+    depends_on:
+      db: {condition: service_healthy}
+    networks: [control]
+  platform:
+    build: .
+    image: hermes-custom-platform:0.1.0
+    labels: {hermes.platform: central}
+    secrets: [database_password, app_key, manager_key, provider_api_key]
+    volumes: ["./config.yaml:/app/config.yaml:ro"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      runtime-image: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 5s
+      retries: 30
+    restart: unless-stopped
+    networks: [frontend, control]
+  manager:
+    image: hermes-custom-platform:0.1.0
+    command: ["uvicorn", "service.manager:app", "--host", "0.0.0.0", "--port", "8001"]
+    user: "0:0"
+    secrets: [manager_key]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+    networks: [control]
+  mail:
+    image: axllent/mailpit:v1.24@sha256:3ad9483ac2dea937ae402b95435ab12c3355d2373a1002a49491db0be536d8fa
+    ports: ["127.0.0.1:8025:8025"]
+    networks: [control, frontend]
+  egress:
+    image: ubuntu/squid:6.10-24.10_edge@sha256:c9f5212b147a766529c7b026e2bebed37b998d33d0066b658596af5eba7cc65c
+    labels: {hermes.platform: egress}
+    volumes: ["./deploy/squid.conf:/etc/squid/squid.conf:ro"]
+    networks: [outbound]
+    restart: unless-stopped
+  runtime-image:
+    build:
+      context: .
+      dockerfile: runtime/Dockerfile
+    image: hermes-custom-runtime:0.1.0
+    entrypoint: ["/bin/true"]
+  ops:
+    profiles: [tools]
+    image: hermes-custom-platform:0.1.0
+    user: "0:0"
+    entrypoint: ["python", "-m", "service.backup"]
+    secrets: [database_password, app_key, manager_key]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config.yaml:/app/config.yaml:ro
+      - ./artifacts/backups:/backups
+    networks: [control]
+volumes:
+  postgres:
+networks:
+  frontend:
+  control: {internal: true}
+  outbound:
+secrets:
+  database_password: {file: .secrets/database_password}
+  app_key: {file: .secrets/app_key}
+  manager_key: {file: .secrets/manager_key}
+  provider_api_key: {file: .secrets/provider_api_key}

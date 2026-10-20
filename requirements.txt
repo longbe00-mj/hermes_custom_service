@@ -1,0 +1,11 @@
+fastapi>=0.115,<1
+uvicorn>=0.34,<1
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.2,<4
+argon2-cffi>=23.1,<26
+httpx>=0.28,<1
+websockets>=15,<17
+docker>=7.1,<8
+PyYAML>=6.0,<7
+pyotp>=2.9,<3
+python-multipart>=0.0.20,<1

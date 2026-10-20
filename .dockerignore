@@ -1,0 +1,7 @@
+.git
+.secrets
+.env
+__pycache__
+artifacts
+.venv
+.terraform

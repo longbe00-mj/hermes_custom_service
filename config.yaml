@@ -1,0 +1,19 @@
+public_url: http://localhost:8088
+database_url: postgresql+psycopg://hermes@db/hermes
+smtp_host: mail
+smtp_port: 1025
+smtp_from: hermes@localhost
+secure_cookies: false
+access_seconds: 900
+refresh_seconds: 604800
+manager_url: http://manager:8001
+max_active_runtimes: 5
+runtime_image: hermes-custom-runtime:0.1.0
+runtime_memory: 4g
+runtime_cpus: 2
+daily_token_limit: 1000000
+max_model_parallel: 2
+provider_base_url: https://api.openai.com/v1
+allowed_models:
+  - gpt-4.1-mini
+default_model: gpt-4.1-mini
