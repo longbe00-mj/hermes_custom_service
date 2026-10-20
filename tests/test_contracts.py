@@ -87,6 +87,25 @@ class Contracts(unittest.TestCase):
             response = self.client.post('/auth/password-login', json={'username': u.username, 'password': password})
             self.assertEqual(response.status_code, 401)
 
+    def test_admin_can_approve_before_email_verification(self):
+        admin, _, credentials = self.user()
+        target, _, target_credentials = self.user(status='pending', verified=False)
+        with factory()() as db:
+            db.get(User, admin.id).admin = True
+            db.commit()
+        headers = {'Authorization': 'Bearer ' + credentials['access_token']}
+        for action in ('approve', 'approve', 'reactivate'):
+            response = self.client.post('/platform/api/admin/users/' + target.id,
+                                        json={'action': action}, headers=headers)
+            self.assertEqual(response.status_code, 200)
+        with factory()() as db:
+            stored = db.get(User, target.id)
+            self.assertEqual(stored.status, 'active')
+            self.assertFalse(stored.email_verified)
+        response = self.client.post('/platform/api/runtime/start',
+                                    headers={'Authorization': 'Bearer ' + target_credentials['access_token']})
+        self.assertEqual(response.status_code, 403)
+
     def test_pending_can_view_status_but_cannot_start(self):
         _, _, p = self.user(status='pending')
         headers = {'Authorization': 'Bearer ' + p['access_token']}

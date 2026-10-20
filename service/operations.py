@@ -73,8 +73,6 @@ async def decide(user_id: str, body: Decision, request: Request):
         states = {'approve': 'active', 'reject': 'rejected', 'suspend': 'suspended', 'reactivate': 'active'}
         if body.action not in states or len(body.reason) > 500:
             raise HTTPException(422)
-        if body.action in ('approve', 'reactivate') and not target.email_verified:
-            raise HTTPException(409, '이메일 확인이 먼저 필요합니다.')
         if body.action in ('reject', 'suspend') and not body.reason.strip():
             raise HTTPException(422, '사유를 입력하세요.')
         next_state = states[body.action]
