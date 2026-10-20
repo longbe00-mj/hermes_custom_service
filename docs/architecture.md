@@ -103,3 +103,5 @@ Team 프로젝트는 개인 runtime을 개방하지 않고 별도 runtime과 vol
 backup은 모든 runtime을 정지하고 edge·platform·manager를 잠시 정지한 뒤 PostgreSQL dump와 service-owned 볼륨을 저장한다. SHA-256 manifest로 파일을 검증한다. restore는 계정과 tenant volume이 없는 초기 target에만 허용한다. 기존 또는 foreign volume과 충돌하면 중단한다. root filesystem은 read-only인 helper로 volume만 복원하고 DB는 단일 transaction으로 복원한다.
 
 백업에는 개인 파일·token·대화·비밀번호 해시가 포함될 수 있으므로 민감정보로 취급한다. `.secrets`는 묶지 않으며 별도 안전한 경로에서 원본을 보존해야 한다. RPO 24h/RTO 4h는 운영 목표이며 schedule·암호화·오프호스트 보관·정기복구 연습은 AWS 운영 단계에서 구성한다.
+
+관리자 OTP 정책: 로컬 초기 설정은 `admin_otp_required: false`로 ID/PW만 사용합니다. `config.yaml`에서 true로 변경하고 platform을 재시작하면 OTP가 필수가 됩니다. 설정 누락 시 기본은 필수입니다. 가입 신청·계정 복구 신청은 로그인 화면의 버튼으로 각각 이동합니다.

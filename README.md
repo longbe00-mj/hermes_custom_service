@@ -34,7 +34,7 @@ bootstrap 명령은 관리자 비밀번호를 대화형으로 받고 authenticat
 - 사용자·관리자 포털: **http://localhost:8088**
 - 개발용 메일함: **http://localhost:8025**
 - 일반 사용자는 가입 → Mailpit의 확인 링크 → 관리자 승인 → 개인 환경 시작 → Hermes GUI 순서로 사용합니다.
-- 관리자는 ID/PW와 OTP로 로그인해 사용자 승인 화면을 이용합니다.
+- 관리자는 현재 로컬 설정에서 ID/PW로 로그인해 사용자 승인 화면을 이용합니다.
 - 관리자 복구: `docker compose exec platform python -m service.cli recover-admin --username admin`.
 
 로컬 메일은 실제 수신자에게 전송하지 않고 Mailpit에 보관합니다. 파일·명령은 로컬 PC 전체가 아니라 사용자 컨테이너의 작업 공간에서 처리됩니다.
@@ -119,3 +119,5 @@ AWS는 Terraform으로 VPC·ALB/TLS·EC2·EBS·IAM·ECR·secret 참조·로그·
 ## 초기 운영 한계
 
 이 버전은 사내 소규모용 로컬 파일럿입니다. 공유 Docker host와 중앙 Manager는 신뢰 영역이며 외부 불특정 고객의 강한 격리·HA를 보장하지 않습니다. browser/도구의 직접 인터넷 접근은 제한되며 HTTP proxy를 사용하는 backend 설정이 필요합니다. 인터넷 서비스로 공개하기 전에 TLS·실제 SMTP·자원 부하·egress·dependency 보안 검토가 필요합니다.
+
+관리자 OTP 정책: 로컬 초기 설정은 `admin_otp_required: false`로 ID/PW만 사용합니다. `config.yaml`에서 true로 변경하고 platform을 재시작하면 OTP가 필수가 됩니다. 설정 누락 시 기본은 필수입니다. 가입 신청·계정 복구 신청은 로그인 화면의 버튼으로 각각 이동합니다.

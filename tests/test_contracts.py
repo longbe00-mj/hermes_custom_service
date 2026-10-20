@@ -65,6 +65,28 @@ class Contracts(unittest.TestCase):
             self.assertEqual(result.status_code, 401)
         self.assertFalse(password_ok('wrong'))
 
+    def test_admin_otp_policy(self):
+        import pyotp
+        u, password, _ = self.user()
+        secret = pyotp.random_base32()
+        with factory()() as db:
+            admin = db.get(User, u.id)
+            admin.admin, admin.totp_secret = True, secret
+            db.commit()
+        policy = dict(config())
+        for required in (False, True):
+            policy['admin_otp_required'] = required
+            with patch('service.accounts.config', return_value=policy):
+                response = self.client.post('/auth/password-login', json={'username': u.username, 'password': password})
+                self.assertEqual(response.status_code, 401 if required else 200)
+        with patch('service.accounts.config', return_value=policy):
+            response = self.client.post('/auth/password-login', json={'username': u.username, 'password': password, 'otp': pyotp.TOTP(secret).now()})
+            self.assertEqual(response.status_code, 200)
+        del policy['admin_otp_required']
+        with patch('service.accounts.config', return_value=policy):
+            response = self.client.post('/auth/password-login', json={'username': u.username, 'password': password})
+            self.assertEqual(response.status_code, 401)
+
     def test_pending_can_view_status_but_cannot_start(self):
         _, _, p = self.user(status='pending')
         headers = {'Authorization': 'Bearer ' + p['access_token']}

@@ -36,7 +36,7 @@ def login(db, username, password, otp, device):
         audit(db, 'anonymous', 'login_failed', digest(username.strip().lower()))
         db.commit()
         raise HTTPException(401, 'ID 또는 비밀번호가 올바르지 않습니다.')
-    if user.admin and (not user.totp_secret or not pyotp.TOTP(user.totp_secret).verify(otp, valid_window=1)):
+    if user.admin and config().get('admin_otp_required', True) and (not user.totp_secret or not pyotp.TOTP(user.totp_secret).verify(otp, valid_window=1)):
         raise HTTPException(401, '관리자 OTP를 확인하세요.')
     if user.status not in ('pending', 'active'):
         raise HTTPException(403, '사용이 제한된 계정입니다.')

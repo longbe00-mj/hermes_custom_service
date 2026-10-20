@@ -72,7 +72,7 @@ def status():
 @app.get('/login')
 @app.get('/platform')
 def portal():
-    return HTMLResponse(Path('/app/service/portal.html').read_text())
+    return HTMLResponse(Path('/app/service/portal.html').read_text().replace('__ADMIN_OTP_REQUIRED__', 'true' if config().get('admin_otp_required', True) else 'false'))
 
 
 from service.auth_routes import router as auth_router
