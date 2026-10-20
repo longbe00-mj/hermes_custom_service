@@ -18,7 +18,7 @@ if not config_path.exists():
         'dashboard': {'public_url': 'http://hc-user-' + os.environ['OWNER_ID'] + ':9119'},
         'plugins': {'enabled': ['central-auth']},
         'terminal': {'backend': 'local', 'cwd': str(home / 'workspace')},
-        'browser': {'proxy': 'http://egress:3128'},
+        'browser': {'backend': 'local'},
     }
     config_path.write_text(json.dumps(cfg))
 (home / 'workspace').mkdir(exist_ok=True)

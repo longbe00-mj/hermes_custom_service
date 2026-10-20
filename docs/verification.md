@@ -13,6 +13,7 @@
 | 승인 전 실행 차단·승인 idempotency | 통과 | 실제 중앙 HTTP API |
 | 개인 Hermes image 시작 | 통과 | non-root·read-only runtime·upstream Dashboard HTML |
 | 실제 runtime 모델 해석 | 통과 | 중앙 base URL·owner scoped credential 일치, provider 실제 호출 아님 |
+| 실제 browser navigation | 통과 | runtime의 Chromium 도구가 격리 HTTP proxy로 example.com 접속 |
 | 사용자 간 runtime 접근 차단 | 통과 | 다른 사용자 session credential의 검증 거부 |
 | JSON-RPC WebSocket | 통과 | 실제 runtime greeting·session.list 응답 |
 | 웹 채팅 PTY | 통과 | 실제 Ink/TUI 출력 수신 |
@@ -45,5 +46,7 @@ contract suite는 별도 DB를 사용하고, live smoke는 자신이 만든 임�
 - 외부 인터넷 HTTPS·운영 SMTP·AWS 자원·Terraform apply.
 - Team 공유·소유권 이전·SSO·소셜 로그인: 설계만 제공.
 - production 침투 테스트·container escape·공급망 취약점 감사.
+
+최초 GitHub Linux CI에서 local secret bind mount의 host/container UID 차이로 migration이 실패했다. setup.sh를 host secret directory 0700과 명시적으로 부여된 read-only secret file 0644로 수정했다. Windows 로컬 결과를 Linux 최초 실행 증거로 취급하지 않으며 원격 CI 결과를 별도 확인한다.
 
 HTTP/RPC 계약 통과를 모든 GUI·provider·보안 계약의 검증으로 확대하지 않는다. 초기 배포 대상은 로컬 사내 파일럿이다.

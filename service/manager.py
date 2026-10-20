@@ -135,6 +135,7 @@ def start(owner: str):
                          'RUNTIME_TOKEN': runtime_token(owner), 'DEFAULT_MODEL': cfg['default_model'],
                          'HTTP_PROXY': 'http://egress:3128', 'HTTPS_PROXY': 'http://egress:3128',
                          'http_proxy': 'http://egress:3128', 'https_proxy': 'http://egress:3128',
+                         'AGENT_BROWSER_ARGS': '--no-sandbox,--disable-dev-shm-usage,--proxy-server=http://egress:3128',
                          'NO_PROXY': 'localhost,127.0.0.1,control', 'no_proxy': 'localhost,127.0.0.1,control'},
             restart_policy={'Name': 'unless-stopped'},
             log_config=docker.types.LogConfig(type='json-file', config={'max-size': '10m', 'max-file': '3'}))

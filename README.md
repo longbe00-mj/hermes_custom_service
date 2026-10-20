@@ -27,6 +27,8 @@ docker compose exec platform python -m service.cli bootstrap-admin --username ad
 
 Linux/macOS의 secret 준비는 `sh scripts/setup.sh`를 사용하고 이후 명령은 같습니다. 현재 runtime image의 실제 검증 host는 Linux amd64 컨테이너입니다.
 
+Linux setup은 host `.secrets` directory를 0700으로 보호하고 파일은 bind mount로 부여한 container UID가 읽을 수 있게 설정합니다. 이 directory의 권한을 임의로 공개하지 마세요.
+
 bootstrap 명령은 관리자 비밀번호를 대화형으로 받고 authenticator 등록 URI를 한 번 출력합니다. URI를 본인 OTP 앱에 등록하세요. **URI는 비밀정보이며 채팅·로그·Git에 올리지 마세요.** 고정 기본 비밀번호는 없습니다.
 
 - 사용자·관리자 포털: **http://localhost:8088**
