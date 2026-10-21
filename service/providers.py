@@ -205,10 +205,12 @@ class Selection(BaseModel):
 
 
 @router.put('/platform/api/models/selection')
-def select_model(body: Selection, request: Request):
+async def select_model(body: Selection, request: Request):
     with factory()() as db:
-        user, _, _ = accounts.require(request, db, active=True)
-        return save_selection(db, user, body.model)
+        user, session, _ = accounts.require(request, db, active=True)
+        result = save_selection(db, user, body.model)
+    from service import model_sync
+    return {**result, **await model_sync.apply(user.id, session.id, body.model)}
 
 
 def save_selection(db, user, model):

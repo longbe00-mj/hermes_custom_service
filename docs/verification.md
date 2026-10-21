@@ -75,3 +75,9 @@ HTTP/RPC 계약 통과를 모든 GUI·provider·보안 계약의 검증으로 �
 ## GUI 모델 저장 CSRF 호환 수정 (2026-10-21)
 
 GUI fetchJSON은 중앙 포털의 X-CSRF-Token을 보내지 않는다. `/api/model/set`이 포털 저장 핸들러를 직접 호출하면서 정상 쿠키+Origin 요청에 403 `CSRF 검증 실패. 다시 로그인하세요.`를 반환하는 것을 회귀 테스트로 재현했다. GUI 저장 핸들러만 명시적으로 exact Origin + JSON 검증을 적용하고, 모델 저장 로직은 공통 함수로 분리했다. 중앙 포털의 `/platform/api/models/selection`은 계속 CSRF를 요구한다. 수정 후 테스트 34개 통과: 정상 GUI 저장·외부 Origin 차단·브라우저 Origin 누락 차단·포털 CSRF 유지 포함.
+
+## 채팅 모델 불일치 수정 (2026-10-21)
+
+중앙 허용 목록·기본값은 gpt-6.1-sol이었지만 admin/longbe00 런타임이 이전 이미지로 실행되어 config.model.default=gpt-4.1-mini를 유지하는 것을 확인했다. 시작 시 사용자별 선택 모델을 인증된 runtime-config에서 조회하고 GUI/포털 저장 시 기존 Hermes 모델 설정 API에도 반영하도록 수정했다. 두 기존 런타임을 데이터 볼륨을 보존해 재생성한 후 실제 설정이 gpt-6.1-sol임을 확인했다.
+
+테스트 36개 통과. live smoke에서 허용 모델 저장 후 실제 런타임 config와 RUNTIME_TOKEN key_env 유지, 재시작 파일 보존을 확인했다. longbe00 런타임에서 실제 gpt-6.1-sol OAuth 추론 요청이 HTTP 200, 정상 텍스트, finish_reason=stop으로 완료됐다. 입력 11·출력 5·총 16토큰. 사용자의 기존 대화 내용은 이 확인 요청에 포함하지 않았다. 기존 채팅의 모델은 유지되므로 새 채팅으로 적용한다.

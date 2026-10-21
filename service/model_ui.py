@@ -41,10 +41,12 @@ class Assignment(BaseModel):
 
 
 @router.post('/api/model/set')
-def gui_assignment(body: Assignment, request: Request):
+async def gui_assignment(body: Assignment, request: Request):
     if body.scope != 'main' or body.provider != 'custom' or body.base_url or body.api_key:
         raise HTTPException(403, '중앙 허용 모델만 선택할 수 있습니다. 공급자·보조 모델 설정은 관리자가 관리합니다.')
     with factory()() as db:
-        user, _, _ = accounts.require(request, db, active=True, gui=True)
+        user, session, _ = accounts.require(request, db, active=True, gui=True)
         result = save_selection(db, user, body.model)
-    return {'ok': True, 'scope': 'main', 'provider': 'custom', 'model': result['model']}
+    from service import model_sync
+    applied = await model_sync.apply(user.id, session.id, body.model)
+    return {'ok': True, 'scope': 'main', 'provider': 'custom', 'model': result['model'], **applied}

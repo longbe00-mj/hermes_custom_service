@@ -33,6 +33,13 @@ def catalog(request: Request):
     return {'object': 'list', 'data': [{'id': m, 'object': 'model'} for m in models]}
 
 
+@router.get('/v1/runtime-config')
+def runtime_config(request: Request):
+    with factory()() as db:
+        user = principal(db, request)
+        return {'model': selected_model(db, user.id) or 'central-default'}
+
+
 def reserve(db, owner, amount, connection=None):
     if connection:
         db.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key': 58231100 if connection == 'openai' else 58231101})

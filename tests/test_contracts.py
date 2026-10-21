@@ -391,6 +391,49 @@ class Contracts(unittest.TestCase):
         portal = self.client.put('/platform/api/models/selection', json={'model':'allowed-gpt'}, headers={'X-CSRF-Token':credentials['csrf_token']})
         self.assertEqual(portal.status_code, 200)
 
+    def test_runtime_configuration_resolves_tenant_selection(self):
+        from service.providers import vault
+        first, _, _ = self.user()
+        second, _, _ = self.user()
+        with factory()() as db:
+            db.add(ModelProvider(id='openai', enabled=True, models=['model-a','model-b'], workspace='', key_cipher=vault().encrypt(b'sk-test').decode()))
+            db.add(ModelPreference(user_id=first.id,model='model-a'))
+            db.add(ModelPreference(user_id=second.id,model='model-b'))
+            db.commit()
+        for user, model in ((first,'model-a'),(second,'model-b')):
+            response=self.client.get('/v1/runtime-config',headers={'Authorization':'Bearer '+runtime_token(user.id)})
+            self.assertEqual(response.status_code,200)
+            self.assertEqual(response.json()['model'],model)
+        self.assertEqual(self.client.get('/v1/runtime-config').status_code,401)
+
+    def test_model_save_updates_running_runtime_defaults(self):
+        import httpx
+        from unittest.mock import AsyncMock
+        from service import model_sync
+        from service.providers import vault
+        user, _, credentials = self.user()
+        with factory()() as db:
+            db.add(ModelProvider(id='openai', enabled=True, models=['new-model'], workspace='', key_cipher=vault().encrypt(b'sk-test').decode()))
+            db.scalar(select(Space).where(Space.user_id==user.id)).runtime_status='running'
+            db.commit()
+        real=httpx.AsyncClient
+        seen=[]
+        def transport(request):
+            import json
+            payload=json.loads(request.content)
+            self.assertEqual(payload['model'],'new-model')
+            self.assertEqual(payload['provider'],'custom')
+            self.assertEqual(payload['base_url'],'http://control:8000/v1')
+            self.assertTrue(request.headers['Authorization'].startswith('Bearer bridge:'))
+            seen.append(payload)
+            return httpx.Response(200,json={'ok':True})
+        with patch('service.proxy.runtime_base',new=AsyncMock(return_value='http://owned-runtime:9119')),patch.object(model_sync.httpx,'AsyncClient',side_effect=lambda **kw:real(transport=httpx.MockTransport(transport),**kw)):
+            response=self.client.post('/api/model/set',headers={'Authorization':'Bearer '+credentials['access_token']},json={'scope':'main','provider':'custom','model':'new-model'})
+        self.assertEqual(response.status_code,200,response.text)
+        self.assertTrue(response.json()['runtime_applied'])
+        self.assertTrue(response.json()['requires_new_session'])
+        self.assertEqual(len(seen),1)
+
     def test_invalid_provider_settings_do_not_change_policy(self):
         headers = self.provider_admin()
         body = {'enabled': True, 'models': ['bad/model'], 'default_model': 'bad/model', 'api_key': 'sk-test'}

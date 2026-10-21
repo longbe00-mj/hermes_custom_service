@@ -3,6 +3,7 @@ import os
 import json
 import shutil
 from pathlib import Path
+from urllib.request import Request, ProxyHandler, build_opener
 
 
 home = Path(os.environ['HERMES_HOME'])
@@ -21,10 +22,12 @@ if not config_path.exists():
         'browser': {'backend': 'local'},
     }
     config_path.write_text(json.dumps(cfg))
-# Bind the main model to the centrally selected alias on process startup only.
+# Resolve the owning user's selected model on process startup; never change live context.
 from ruamel.yaml import YAML
 cfg = YAML(typ='safe').load(config_path.read_text()) or {}
-cfg['model'] = {'provider': 'custom', 'default': 'central-default', 'base_url': 'http://control:8000/v1', 'key_env': 'RUNTIME_TOKEN'}
+with build_opener(ProxyHandler({})).open(Request('http://control:8000/v1/runtime-config', headers={'Authorization': 'Bearer ' + os.environ['RUNTIME_TOKEN']}), timeout=15) as response:
+    selected = json.load(response)['model']
+cfg['model'] = {'provider': 'custom', 'default': selected, 'base_url': 'http://control:8000/v1', 'key_env': 'RUNTIME_TOKEN'}
 config_path.write_text(json.dumps(cfg))
 (home / 'workspace').mkdir(exist_ok=True)
 os.execv('/opt/hermes/bin/hermes', ['hermes', 'dashboard', '--host', '0.0.0.0', '--port', '9119', '--no-open'])

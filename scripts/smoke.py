@@ -11,7 +11,7 @@ import pyotp
 import websockets
 from sqlalchemy import delete, select
 
-from service.db import ActionToken, Attempt, Audit, Identity, LocalCredential, LoginSession, ModelCall, NativeFlow, Space, Usage, User, factory
+from service.db import ActionToken, Attempt, Audit, Identity, LocalCredential, LoginSession, ModelCall, ModelPreference, NativeFlow, Space, Usage, User, factory
 from service.security import hasher, token
 from service.settings import config
 
@@ -105,7 +105,7 @@ def cleanup():
                 raise RuntimeError('Refusing cleanup outside smoke fixture')
             user.status = 'suspended'
         db.commit()
-        for model in (NativeFlow, ActionToken, LoginSession, Identity, LocalCredential, Space, ModelCall, Usage):
+        for model in (ModelPreference, NativeFlow, ActionToken, LoginSession, Identity, LocalCredential, Space, ModelCall, Usage):
             db.execute(delete(model).where(model.user_id.in_(created)))
         db.execute(delete(User).where(User.id.in_(created)))
         db.commit()
@@ -150,6 +150,14 @@ def main():
         probe = runtime.exec_run(['/opt/hermes/.venv/bin/python', '-c',
             "import sys,os,pathlib; sys.path.insert(0,'/opt/hermes'); import hermes_bootstrap; from hermes_cli.runtime_provider import resolve_runtime_provider; r=resolve_runtime_provider(); assert r['base_url']=='http://control:8000/v1','wrong model endpoint'; assert r['api_key']==os.environ['RUNTIME_TOKEN'],'wrong runtime credential'; pathlib.Path('/opt/data/workspace/smoke-marker').write_text('durable')"])
         assert probe.exit_code == 0, probe.output.decode(errors='replace')[-500:]
+        choices = expect(client.get('/platform/api/models', headers=headers(pa)))['models']
+        if choices:
+            chosen = choices[-1]
+            selection = expect(client.post('/api/model/set', headers=headers(pa), json={'scope':'main','provider':'custom','model':chosen}))
+            assert selection['runtime_applied'], selection
+            probe = runtime.exec_run(['/opt/hermes/.venv/bin/python','-c',
+                "from pathlib import Path; from ruamel.yaml import YAML; m=YAML(typ='safe').load(Path('/opt/data/config.yaml').read_text())['model']; assert m['default']==" + repr(chosen) + "; assert m['key_env']=='RUNTIME_TOKEN'"])
+            assert probe.exit_code == 0, probe.output.decode(errors='replace')[-400:]
         expect(client.get('/api/profiles', headers=headers(pa)))
         expect(client.post('/api/profiles', headers=headers(pa), json={}), 403)
         probe = runtime.exec_run(['/opt/hermes/.venv/bin/python', '-c',
