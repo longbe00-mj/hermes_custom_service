@@ -37,7 +37,7 @@ def entries(db):
 
 
 def allowed(db):
-    return {model: row for row in entries(db) if row.enabled for model in row.models}
+    return {model: row for row in entries(db) if row.enabled and metadata(row)['configured'] for model in row.models}
 
 
 def default_model(db):

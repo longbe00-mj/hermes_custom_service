@@ -60,3 +60,7 @@ HTTP/RPC 계약 통과를 모든 GUI·provider·보안 계약의 검증으로 �
 - 최종 수정 이미지로 live smoke 통과: 실제 Hermes GUI, runtime provider endpoint/scoped key, WS/PTY, 브라우저 실행, 로그아웃 취소, 파일 중지·시작 보존, 정지 계정 차단. 부팅 YAML 의존성과 이미지 교체 시 비교 문제를 수정한 뒤 재검증했다.
 - 실제 longbe00 포털에서 관리자 허용 모델 선택 UI 표시를 DOM으로 확인했다. 관리자 폼 전체 브라우저 저장·외부 연결은 미검증이다.
 - 공급자 자격증명이 없어 실제 유료 모델 생성, OAuth 동의·갱신은 실행하지 않았다. OAuth 중앙 공유는 현재 활성 기능이 아니다.
+
+## GUI 모델 목록 정책 검증 (2026-10-21)
+
+계약 테스트 25개 통과. GUI REST 목록은 관리자 허용 모델만 포함하고 include_unconfigured·타 프로필·refresh로 우회할 수 없는지, 비활성 공급자 제외·금지 모델 저장 거부·허용 모델 저장·빈 목록을 확인했다. live smoke에는 WebSocket model.options 결과와 중앙 목록의 일치 검증을 추가했다.

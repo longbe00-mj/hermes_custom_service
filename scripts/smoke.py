@@ -66,6 +66,16 @@ async def check_ws(p):
                 break
         else:
             raise AssertionError('session.list response missing')
+        await socket.send(json.dumps({'jsonrpc': '2.0', 'id': 2, 'method': 'model.options', 'params': {'include_unconfigured': True}}))
+        for _ in range(20):
+            message = json.loads(await asyncio.wait_for(socket.recv(), 20))
+            if message.get('id') == 2:
+                central = expect(client.get('/platform/api/models', headers=headers(p)))['models']
+                shown = [m for provider in message['result']['providers'] for m in provider['models']]
+                assert shown == central, 'RPC picker bypassed central policy'
+                break
+        else:
+            raise AssertionError('model.options response missing')
         pty_ticket = expect(client.post('/api/auth/ws-ticket', headers=headers(p)))['ticket']
         async with websockets.connect('ws://platform:8000/api/pty?ticket=' + pty_ticket,
                                       origin=config()['public_url'], proxy=None) as pty:

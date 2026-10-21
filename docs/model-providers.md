@@ -72,3 +72,9 @@ Anthropic 호환 계층: [공식 문서](https://platform.claude.com/docs/en/cli
 관리자 권한, 키 보존·암호화·비노출, 연결 테스트, 목록/선택/호출의 허용 모델 제한,
 공급자 비활성화, Anthropic 호스트·헤더·도구 전달·사용량 정산을 확인한다.
 실제 공급자 자격증명이 없으므로 실제 OAuth 동의, 유료 모델 응답, 공급자별 tool 실행은 미검증이다.
+
+## Hermes GUI Models 메뉴 연동 (2026-10-21)
+
+GUI의 `/api/model/options`와 WebSocket `model.options`는 런타임 공급자 inventory 대신 중앙 정책을 반환한다. include_unconfigured, refresh, profile 파라미터로 외부 공급자나 미설정 모델을 추가할 수 없다. 키 등록·활성화·허용 목록 조건을 모두 만족한 모델만 Central 공급자 그룹에 표시한다. 연결 모델이 없으면 빈 목록을 반환한다.
+
+GUI main 모델 저장은 중앙 사용자 모델 선택으로 처리한다. 임의 공급자, endpoint, key, 보조 모델 override는 허용하지 않는다. GUI의 main 상태는 중앙 선택 모델을 표시하며 보조 모델 개별 설정 컨트롤은 노출하지 않는다. 이 UI 응답은 기존 런타임의 보조 설정 파일을 삭제하거나 변경하지 않는다. 실행 중인 세션 변경 조건은 앞의 요청 경로와 제한 절을 따른다.

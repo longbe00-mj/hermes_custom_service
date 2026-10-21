@@ -344,6 +344,32 @@ class Contracts(unittest.TestCase):
             usage = db.scalar(select(Usage).where(Usage.user_id == user.id))
             self.assertEqual((usage.tokens, usage.inflight), (9, 0))
 
+    def test_gui_models_use_only_configured_admin_allowlist(self):
+        from service.db import ModelProvider
+        from service.providers import vault
+        user, _, credentials = self.user()
+        headers = {'Authorization': 'Bearer ' + credentials['access_token']}
+        with factory()() as db:
+            db.add_all([ModelProvider(id='openai', enabled=True, models=['allowed-gpt'], workspace='', key_cipher=vault().encrypt(b'sk-test').decode()),
+                        ModelProvider(id='anthropic', enabled=False, models=['hidden-claude'], workspace='', key_cipher=vault().encrypt(b'sk-ant-test').decode())])
+            db.commit()
+        for suffix in ('', '?include_unconfigured=true&refresh=true&profile=foreign'):
+            response = self.client.get('/api/model/options'+suffix, headers=headers)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()['providers'][0]['models'], ['allowed-gpt'])
+            self.assertNotIn('hidden-claude', response.text)
+        chosen = self.client.post('/api/model/set', headers=headers, json={'scope':'main','provider':'custom','model':'allowed-gpt'})
+        self.assertEqual(chosen.status_code, 200)
+        self.assertEqual(self.client.get('/api/model/auxiliary', headers=headers).json()['main']['model'], 'allowed-gpt')
+        for model in ('hidden-claude', 'invented-model'):
+            response = self.client.post('/api/model/set', headers=headers, json={'scope':'main','provider':'custom','model':model})
+            self.assertEqual(response.status_code, 403)
+        with factory()() as db:
+            row = db.get(ModelProvider, 'openai')
+            row.enabled = False
+            db.commit()
+        self.assertEqual(self.client.get('/api/model/options', headers=headers).json()['providers'], [])
+
     def test_invalid_provider_settings_do_not_change_policy(self):
         headers = self.provider_admin()
         body = {'enabled': True, 'models': ['bad/model'], 'default_model': 'bad/model', 'api_key': 'sk-test'}

@@ -2,6 +2,7 @@
 import asyncio
 import datetime as dt
 import hmac
+import json
 
 import httpx
 import websockets
@@ -165,6 +166,18 @@ async def websocket_proxy(socket: WebSocket, path: str):
                     with factory()() as db:
                         if not live_session(db, sid):
                             return
+                    if path == 'api/ws' and frame.get('text'):
+                        try:
+                            rpc = json.loads(frame['text'])
+                        except ValueError:
+                            rpc = None
+                        if isinstance(rpc, dict) and rpc.get('method') == 'model.options':
+                            from service.model_ui import options
+                            with factory()() as db:
+                                payload = options(db, owner)
+                            if 'id' in rpc:
+                                await socket.send_json({'jsonrpc': '2.0', 'id': rpc['id'], 'result': payload})
+                            continue
                     await upstream.send(frame.get('bytes') if frame.get('bytes') is not None else frame['text'])
 
             async def outgoing():
