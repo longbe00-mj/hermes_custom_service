@@ -64,3 +64,10 @@ HTTP/RPC 계약 통과를 모든 GUI·provider·보안 계약의 검증으로 �
 ## GUI 모델 목록 정책 검증 (2026-10-21)
 
 계약 테스트 25개 통과. GUI REST 목록은 관리자 허용 모델만 포함하고 include_unconfigured·타 프로필·refresh로 우회할 수 없는지, 비활성 공급자 제외·금지 모델 저장 거부·허용 모델 저장·빈 목록을 확인했다. live smoke에는 WebSocket model.options 결과와 중앙 목록의 일치 검증을 추가했다.
+
+## 중앙 OAuth / 공식 SDK 어댑터 검증 (2026-10-21)
+
+- 계약 테스트 33개 통과: 기존 25개와 OAuth 관리자/기기 바인딩·일회용 callback, OIDC 서명/nonce/audience, 토큰 refresh 동시성, 권한 철회·연결 generation·미등록 client 차단, 공유 동시 실행 제한, 연결 해제·모델 교집합 포함.
+- 공식 OpenAI·Anthropic SDK가 mock HTTP/SSE를 실제 파싱하는 방식으로 Responses 도구 스트림, Messages 텍스트, 인증 Bearer 헤더, API 키 자동 fallback 부재와 사용량 정산을 확인했다. 실제 공급자 생성 응답은 아니다.
+- live smoke 통과: Hermes GUI, JSON-RPC 모델 목록, WS/PTY, 브라우저, 프로필 격리, 로그아웃/정지, 개인 파일 재시작 보존. 임시 계정/컨테이너만 정리했다.
+- 포털 JavaScript 구문 검사 통과. 실제 관리자 OAuth 동의와 Anthropic 승인 client 등록, 실제 모델 사용·과금, 중앙 계정 공유 계약은 미검증이다.

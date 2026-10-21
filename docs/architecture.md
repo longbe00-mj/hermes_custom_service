@@ -111,3 +111,7 @@ backup은 모든 runtime을 정지하고 edge·platform·manager를 잠시 정�
 ## 중앙 모델 프로바이더 관리 확장
 
 `model_providers`는 공급자 활성 여부, 허용 모델, 암호화 API 키를 저장하고 `model_policy`는 전체 기본 모델, `model_preferences`는 사용자 선택을 보관한다. 저장은 관리자 권한과 CSRF 검증을 요구한다. 런타임의 `central-default` 요청은 사용자 선택 또는 전체 기본 모델로 해석하며, 실제 ID 요청도 매번 같은 허용 목록을 검사한다. 모델 키는 런타임에 전달하지 않는다. OpenAI·Anthropic API 키 연결을 구현했으며 개인 구독 OAuth 중앙 공유는 활성화하지 않았다. 상세 계약과 제약은 [중앙 모델 프로바이더 관리](model-providers.md)를 참조한다.
+
+## 중앙 OAuth 구현 (2026-10-21)
+
+스키마 v3의 provider_oauth·provider_oauth_flows·provider_calls로 관리자 grant, 일회용 인증 요청, 연결 단위 실행 제한을 관리한다. 공식 OpenAI Responses / Anthropic Messages SDK 어댑터를 중앙 서버에서 사용하며 Hermes agent·도구 실행은 유지한다. 실제 OAuth 동의, 공급자 계약, Anthropic 등록 client 검증은 별도다. [OAuth 설정](oauth-setup.md)을 참조한다.

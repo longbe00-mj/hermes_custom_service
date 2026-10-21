@@ -5,10 +5,10 @@ import json
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert
 
-from service.db import ModelCall, Usage, User, factory, now
+from service.db import ModelCall, ProviderCall, ProviderOAuth, Usage, User, factory, now
 from service.security import runtime_token
 from service.settings import config, secret
 from service.providers import ENDPOINTS, allowed, selected_model, vault
@@ -33,7 +33,13 @@ def catalog(request: Request):
     return {'object': 'list', 'data': [{'id': m, 'object': 'model'} for m in models]}
 
 
-def reserve(db, owner, amount):
+def reserve(db, owner, amount, connection=None):
+    if connection:
+        db.execute(text('SELECT pg_advisory_xact_lock(:key)'), {'key': 58231100 if connection == 'openai' else 58231101})
+        running = db.scalar(select(func.count()).select_from(ProviderCall).join(ModelCall, ModelCall.id == ProviderCall.call_id)
+                            .where(ProviderCall.provider == connection, ModelCall.state == 'running'))
+        if running >= config().get('oauth_max_parallel', 1):
+            raise HTTPException(429, '공유 OAuth 연결이 사용 중입니다. 잠시 후 다시 시도하세요.')
     user = db.scalar(select(User).where(User.id == owner).with_for_update())
     if not user or user.status != 'active':
         raise HTTPException(403, 'Account is not active')
@@ -50,6 +56,9 @@ def reserve(db, owner, amount):
     row.inflight += 1
     call = ModelCall(user_id=owner, usage_id=key, reserved=amount)
     db.add(call)
+    db.flush()
+    if connection:
+        db.add(ProviderCall(call_id=call.id, provider=connection))
     db.commit()
     return call.id
 
@@ -88,10 +97,13 @@ async def completion(request: Request):
         if not isinstance(model, str) or model not in allowed(db):
             raise HTTPException(403, 'Model is not allowed')
         provider = allowed(db)[model]
-        key = vault().decrypt(provider.key_cipher.encode()).decode() if provider.key_cipher else (secret('provider_api_key') if provider.id == 'openai' else '')
+        grant = db.get(ProviderOAuth, provider.id)
+        oauth = bool(grant and grant.selected)
+        generation = grant.generation if oauth else 0
+        key = '' if oauth else vault().decrypt(provider.key_cipher.encode()).decode() if provider.key_cipher else (secret('provider_api_key') if provider.id == 'openai' else '')
         endpoint = ENDPOINTS[provider.id]
         workspace = provider.workspace
-    if not key:
+    if not key and not oauth:
         raise HTTPException(503, '관리자가 모델 API 키를 설정해야 합니다.')
     if body.get('n', 1) != 1:
         raise HTTPException(422, 'Only one completion per request is supported')
@@ -103,11 +115,17 @@ async def completion(request: Request):
     body.pop('max_tokens', None)
     if body.get('stream'):
         body['stream_options'] = {'include_usage': True}
+    if oauth:
+        from service.oauth_inference import validate
+        validate(body, provider.id)
     # Byte-based reservation is conservative for text, not a provider billing quote.
     amount = len(raw) + cap + 1024
     with factory()() as db:
         principal(db, request)
-        call_id = reserve(db, owner, amount)
+        call_id = reserve(db, owner, amount, provider.id if oauth else None)
+    if oauth:
+        from service.oauth_inference import completion as oauth_completion
+        return await oauth_completion(provider.id, body, owner, call_id, generation, workspace)
     client = httpx.AsyncClient(timeout=httpx.Timeout(300, connect=10), trust_env=False)
     try:
         upstream = await client.send(client.build_request('POST', endpoint + '/chat/completions',

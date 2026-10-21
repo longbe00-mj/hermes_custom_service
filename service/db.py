@@ -110,6 +110,12 @@ class ModelCall(Base):
     created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class ProviderCall(Base):
+    __tablename__ = 'provider_calls'
+    call_id: Mapped[str] = mapped_column(ForeignKey('model_calls.id'), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(24), index=True)
+
+
 class Audit(Base):
     __tablename__ = 'audit_events'
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
@@ -127,6 +133,35 @@ class ModelProvider(Base):
     models: Mapped[list] = mapped_column(JSON, default=list)
     key_cipher: Mapped[str | None] = mapped_column(String(8192))
     workspace: Mapped[str] = mapped_column(String(128), default='')
+
+
+class ProviderOAuth(Base):
+    __tablename__ = 'provider_oauth'
+    provider: Mapped[str] = mapped_column(String(24), primary_key=True)
+    selected: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(32), default='disconnected')
+    token_cipher: Mapped[str | None] = mapped_column(String(32768))
+    client_id: Mapped[str] = mapped_column(String(256), default='')
+    host_id: Mapped[str] = mapped_column(String(64), default=uid)
+    subject: Mapped[str] = mapped_column(String(256), default='')
+    available_models: Mapped[list] = mapped_column(JSON, default=list)
+    expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    generation: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ProviderOAuthFlow(Base):
+    __tablename__ = 'provider_oauth_flows'
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(24))
+    session_id: Mapped[str] = mapped_column(ForeignKey('login_sessions.id'))
+    verifier_cipher: Mapped[str] = mapped_column(String(1024))
+    nonce: Mapped[str] = mapped_column(String(128))
+    redirect_uri: Mapped[str] = mapped_column(String(512))
+    client_id: Mapped[str] = mapped_column(String(256))
+    generation: Mapped[int] = mapped_column(Integer)
+    code_cipher: Mapped[str | None] = mapped_column(String(8192))
+    expires_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), default='pending')
 
 
 class ModelPolicy(Base):

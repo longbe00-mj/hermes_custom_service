@@ -37,7 +37,17 @@ def entries(db):
 
 
 def allowed(db):
-    return {model: row for row in entries(db) if row.enabled and metadata(row)['configured'] for model in row.models}
+    from service.db import ProviderOAuth
+    from service.provider_oauth import usable
+    result = {}
+    for row in entries(db):
+        grant = db.get(ProviderOAuth, row.id)
+        if not row.enabled or not metadata(row, db)['configured']:
+            continue
+        for model in row.models:
+            if not grant or not grant.selected or (usable(grant) and model in grant.available_models):
+                result[model] = row
+    return result
 
 
 def default_model(db):
@@ -53,10 +63,16 @@ def selected_model(db, owner):
     return preference.model if preference and preference.model in models else default_model(db)
 
 
-def metadata(row):
-    configured = bool(row.key_cipher) or (row.id == 'openai' and bool(secret('provider_api_key')))
+def metadata(row, db=None):
+    from service.provider_oauth import status
+    if db is None:
+        with factory()() as session:
+            return metadata(row, session)
+    oauth = status(db, row.id)
+    configured = oauth['connected'] if oauth['selected'] else (bool(row.key_cipher) or (row.id == 'openai' and bool(secret('provider_api_key'))))
     return {'id': row.id, 'enabled': row.enabled, 'models': row.models, 'configured': configured,
-            'workspace': row.workspace, 'auth_method': 'api_key', 'oauth': OAUTH[row.id]}
+            'workspace': row.workspace, 'auth_method': 'oauth' if oauth['selected'] else 'api_key',
+            'oauth': {**OAUTH[row.id], **oauth, 'supported': oauth['configured_client']}}
 
 
 @router.post('/platform/api/admin/model-providers/{provider}/test')
@@ -67,8 +83,23 @@ async def test_provider(provider: str, request: Request):
         admin, _, _ = accounts.require(request, db, active=True, admin=True)
         accounts.throttle(db, 'provider-test:' + admin.id, maximum=10)
         row = next((p for p in entries(db) if p.id == provider), None)
-        if not row or not metadata(row)['configured']:
+        if not row or not metadata(row, db)['configured']:
             raise HTTPException(409, 'API 키를 먼저 저장하세요.')
+        if metadata(row, db)['auth_method'] == 'oauth':
+            from service.provider_oauth import access_token, catalog
+            from service.db import ProviderOAuth
+            generation = db.get(ProviderOAuth, provider).generation
+            workspace = row.workspace
+            access = await access_token(provider, generation)
+            models = await catalog(provider, access, workspace)
+            db.expire_all()
+            grant = db.scalar(select(ProviderOAuth).where(ProviderOAuth.provider == provider).with_for_update())
+            if grant.generation != generation or not grant.selected or grant.status != 'connected':
+                raise HTTPException(409, 'OAuth 연결이 변경되었습니다. 다시 조회하세요.')
+            grant.available_models = models
+            audit(db, admin.id, 'model_provider_test', provider)
+            db.commit()
+            return {'ok': True, 'models': models, 'note': 'OAuth 연결과 계정 모델 목록을 확인했습니다.'}
         key = vault().decrypt(row.key_cipher.encode()).decode() if row.key_cipher else secret('provider_api_key')
         headers = {'Authorization': 'Bearer ' + key}
         if provider == 'anthropic':
@@ -93,6 +124,7 @@ class ProviderInput(BaseModel):
     models: list[str] = Field(max_length=100)
     api_key: SecretStr | None = None
     workspace: str = Field(default='', max_length=128, pattern=r'^[a-zA-Z0-9_-]*$')
+    auth_method: str = Field(default='api_key', pattern=r'^(api_key|oauth)$')
     default_model: str = Field(max_length=128, pattern=r'^[a-zA-Z0-9._:-]*$')
 
 
@@ -101,7 +133,7 @@ def providers(request: Request):
     with factory()() as db:
         accounts.require(request, db, active=True, admin=True)
         present = {row.id: row for row in entries(db)}
-        return {'providers': [metadata(present.get(name) or ModelProvider(id=name, enabled=False, models=[], workspace=''))
+        return {'providers': [metadata(present.get(name) or ModelProvider(id=name, enabled=False, models=[], workspace=''), db)
                               for name in ENDPOINTS], 'default_model': default_model(db)}
 
 
@@ -127,12 +159,24 @@ def save_provider(provider: str, body: ProviderInput, request: Request):
         if not row:
             row = ModelProvider(id=provider, enabled=False, models=[], workspace='')
             db.add(row)
-        if supplied:
+        from service.db import ProviderOAuth
+        from service.provider_oauth import usable
+        grant = db.scalar(select(ProviderOAuth).where(ProviderOAuth.provider == provider).with_for_update())
+        if body.auth_method == 'oauth' and not usable(grant):
+            raise HTTPException(422, 'OAuth 연결을 먼저 완료하세요.')
+        if grant:
+            selected = body.auth_method == 'oauth'
+            if grant.selected != selected:
+                grant.generation += 1
+            grant.selected = selected
+        if supplied and body.auth_method == 'api_key':
             row.key_cipher = vault().encrypt(supplied.encode()).decode()
         row.enabled, row.models, row.workspace = body.enabled, models, body.workspace
         db.flush()
-        if row.enabled and (not models or not metadata(row)['configured']):
+        if row.enabled and (not models or not metadata(row, db)['configured']):
             raise HTTPException(422, '활성화하려면 API 키와 허용 모델을 설정하세요.')
+        if body.enabled and body.auth_method == 'oauth' and any(m not in grant.available_models for m in models):
+            raise HTTPException(422, 'OAuth 계정에서 조회된 모델만 허용할 수 있습니다.')
         all_models = [m for p in entries(db) if p.enabled for m in p.models]
         if len(set(all_models)) != len(all_models):
             raise HTTPException(422, '모델 ID는 공급자 간 중복될 수 없습니다.')
@@ -146,7 +190,7 @@ def save_provider(provider: str, body: ProviderInput, request: Request):
         audit(db, admin.id, 'model_provider_update', provider, enabled=body.enabled, models=models,
               default_model=body.default_model, credential_changed=bool(supplied))
         db.commit()
-        return metadata(row)
+        return metadata(row, db)
 
 
 @router.get('/platform/api/models')

@@ -45,7 +45,7 @@ bootstrap 명령은 관리자 비밀번호를 대화형으로 받고 authenticat
 
 키가 없어도 계정·승인·GUI·런타임을 검증할 수 있습니다. 실제 모델 호출은 명시적으로 503을 반환합니다. 가짜 모델 응답을 제공하지 않습니다.
 
-최초 model gateway는 `/v1/chat/completions`와 `/v1/models`를 지원합니다. native Responses, 개인 구독 OAuth, 공급자별 별도 API는 지원 범위가 아닙니다. upstream runtime 기본 모델 경로는 중앙 Chat Completions에 연결됩니다.
+최초 model gateway는 `/v1/chat/completions`와 `/v1/models`를 지원합니다. OAuth 연결은 별도 공식 SDK 어댑터로 Responses와 Messages를 사용합니다. API 키 경로와 자동 전환하지 않습니다. upstream runtime 기본 모델 경로는 중앙 Chat Completions에 연결됩니다.
 
 한도는 token 예약·provider usage 정산이며 정확한 청구액 보증이 아닙니다. 응답 usage가 없거나 중단되면 예약량을 유지합니다. crash 후에는 먼저 drain하고 `python -m service.cli reconcile-calls`를 운영자가 실행해 남은 동시 호출 claim을 정리할 수 있습니다.
 
@@ -120,4 +120,4 @@ AWS는 Terraform으로 VPC·ALB/TLS·EC2·EBS·IAM·ECR·secret 참조·로그·
 
 ## 관리자 모델 설정
 
-관리자로 로그인한 뒤 **모델 프로바이더 관리**에서 OpenAI·Anthropic API 키와 허용 모델을 저장하세요. 사용자는 포털에서 허용 모델만 선택할 수 있고, 중앙 모델 API도 같은 목록을 검증합니다. 기존 환경은 중지·시작 후 새 세션을 여세요. OAuth의 중앙 공유는 공급자 승인 범위가 확인되지 않아 활성화하지 않았습니다. [구현 범위와 OAuth 검토](docs/model-providers.md)를 참고하세요.
+관리자로 로그인한 뒤 **모델 프로바이더 관리**에서 OpenAI·Anthropic API 키와 허용 모델을 저장하세요. 사용자는 포털에서 허용 모델만 선택할 수 있고, 중앙 모델 API도 같은 목록을 검증합니다. 기존 환경은 중지·시작 후 새 세션을 여세요. 중앙 OAuth 연결 기능은 [OAuth 설정](docs/oauth-setup.md)을 참고하세요. 실제 관리자 동의와 계정·계약 범위 검증이 필요합니다. [구현 범위와 OAuth 검토](docs/model-providers.md)를 참고하세요.

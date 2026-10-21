@@ -10,3 +10,6 @@ PyYAML>=6.0,<7
 pyotp>=2.9,<3
 python-multipart>=0.0.20,<1
 cryptography>=46.0.3,<47
+openai>=3.35,<4
+anthropic>=1.17,<2
+PyJWT>=2.15,<3

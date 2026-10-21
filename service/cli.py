@@ -17,8 +17,8 @@ def migrate():
         connection.execute(text('SELECT pg_advisory_xact_lock(58231001)'))
         Base.metadata.create_all(connection)
         connection.execute(text('CREATE TABLE IF NOT EXISTS platform_schema (version integer PRIMARY KEY)'))
-        connection.execute(text('INSERT INTO platform_schema(version) VALUES (2) ON CONFLICT DO NOTHING'))
-    print('Schema version 2 ready.')
+        connection.execute(text('INSERT INTO platform_schema(version) VALUES (3) ON CONFLICT DO NOTHING'))
+    print('Schema version 3 ready.')
 
 
 def bootstrap(args):
