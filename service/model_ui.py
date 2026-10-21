@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from service import accounts
 from service.db import factory
-from service.providers import Selection, allowed, select_model, selected_model
+from service.providers import allowed, save_selection, selected_model
 
 router = APIRouter()
 
@@ -44,5 +44,7 @@ class Assignment(BaseModel):
 def gui_assignment(body: Assignment, request: Request):
     if body.scope != 'main' or body.provider != 'custom' or body.base_url or body.api_key:
         raise HTTPException(403, '중앙 허용 모델만 선택할 수 있습니다. 공급자·보조 모델 설정은 관리자가 관리합니다.')
-    result = select_model(Selection(model=body.model), request)
+    with factory()() as db:
+        user, _, _ = accounts.require(request, db, active=True, gui=True)
+        result = save_selection(db, user, body.model)
     return {'ok': True, 'scope': 'main', 'provider': 'custom', 'model': result['model']}

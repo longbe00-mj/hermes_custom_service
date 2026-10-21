@@ -71,3 +71,7 @@ HTTP/RPC 계약 통과를 모든 GUI·provider·보안 계약의 검증으로 �
 - 공식 OpenAI·Anthropic SDK가 mock HTTP/SSE를 실제 파싱하는 방식으로 Responses 도구 스트림, Messages 텍스트, 인증 Bearer 헤더, API 키 자동 fallback 부재와 사용량 정산을 확인했다. 실제 공급자 생성 응답은 아니다.
 - live smoke 통과: Hermes GUI, JSON-RPC 모델 목록, WS/PTY, 브라우저, 프로필 격리, 로그아웃/정지, 개인 파일 재시작 보존. 임시 계정/컨테이너만 정리했다.
 - 포털 JavaScript 구문 검사 통과. 실제 관리자 OAuth 동의와 Anthropic 승인 client 등록, 실제 모델 사용·과금, 중앙 계정 공유 계약은 미검증이다.
+
+## GUI 모델 저장 CSRF 호환 수정 (2026-10-21)
+
+GUI fetchJSON은 중앙 포털의 X-CSRF-Token을 보내지 않는다. `/api/model/set`이 포털 저장 핸들러를 직접 호출하면서 정상 쿠키+Origin 요청에 403 `CSRF 검증 실패. 다시 로그인하세요.`를 반환하는 것을 회귀 테스트로 재현했다. GUI 저장 핸들러만 명시적으로 exact Origin + JSON 검증을 적용하고, 모델 저장 로직은 공통 함수로 분리했다. 중앙 포털의 `/platform/api/models/selection`은 계속 CSRF를 요구한다. 수정 후 테스트 34개 통과: 정상 GUI 저장·외부 Origin 차단·브라우저 Origin 누락 차단·포털 CSRF 유지 포함.

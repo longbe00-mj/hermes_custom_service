@@ -208,13 +208,17 @@ class Selection(BaseModel):
 def select_model(body: Selection, request: Request):
     with factory()() as db:
         user, _, _ = accounts.require(request, db, active=True)
-        if body.model not in allowed(db):
-            raise HTTPException(403, '관리자가 허용하지 않은 모델입니다.')
-        row = db.get(ModelPreference, user.id)
-        if row:
-            row.model = body.model
-        else:
-            db.add(ModelPreference(user_id=user.id, model=body.model))
-        audit(db, user.id, 'model_selection', body.model)
-        db.commit()
-        return {'model': body.model}
+        return save_selection(db, user, body.model)
+
+
+def save_selection(db, user, model):
+    if model not in allowed(db):
+        raise HTTPException(403, '관리자가 허용하지 않은 모델입니다.')
+    row = db.get(ModelPreference, user.id)
+    if row:
+        row.model = model
+    else:
+        db.add(ModelPreference(user_id=user.id, model=model))
+    audit(db, user.id, 'model_selection', model)
+    db.commit()
+    return {'model': model}

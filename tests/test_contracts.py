@@ -370,6 +370,27 @@ class Contracts(unittest.TestCase):
             db.commit()
         self.assertEqual(self.client.get('/api/model/options', headers=headers).json()['providers'], [])
 
+    def test_gui_cookie_model_selection_uses_exact_origin_json(self):
+        from service.providers import vault
+        _, _, credentials = self.user()
+        with factory()() as db:
+            db.add(ModelProvider(id='openai', enabled=True, models=['allowed-gpt'], workspace='', key_cipher=vault().encrypt(b'sk-test').decode()))
+            db.commit()
+        self.client.cookies.set(accounts.AT_COOKIE, credentials['access_token'])
+        body = {'scope': 'main', 'provider': 'custom', 'model': 'allowed-gpt'}
+        response = self.client.post('/api/model/set', json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        foreign = self.client.post('/api/model/set', json=body, headers={'Origin':'https://evil.invalid'})
+        self.assertEqual(foreign.status_code, 403)
+        del self.client.headers['Origin']
+        missing = self.client.post('/api/model/set', json=body, headers={'Sec-Fetch-Site':'same-origin'})
+        self.assertEqual(missing.status_code, 403)
+        self.client.headers['Origin'] = config()['public_url']
+        portal = self.client.put('/platform/api/models/selection', json={'model':'allowed-gpt'})
+        self.assertEqual(portal.status_code, 403)
+        portal = self.client.put('/platform/api/models/selection', json={'model':'allowed-gpt'}, headers={'X-CSRF-Token':credentials['csrf_token']})
+        self.assertEqual(portal.status_code, 200)
+
     def test_invalid_provider_settings_do_not_change_policy(self):
         headers = self.provider_admin()
         body = {'enabled': True, 'models': ['bad/model'], 'default_model': 'bad/model', 'api_key': 'sk-test'}

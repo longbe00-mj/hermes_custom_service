@@ -83,7 +83,7 @@ def rotate(db, refresh):
     return user, row, at, rt, csrf_for(row.id)
 
 
-def require(request: Request, db, active=False, admin=False):
+def require(request: Request, db, active=False, admin=False, gui=False):
     authorization = request.headers.get('authorization', '')
     bearer = authorization.startswith('Bearer ')
     access = authorization[7:] if bearer else getattr(request.state, 'access', request.cookies.get(AT_COOKIE, ''))
@@ -91,7 +91,10 @@ def require(request: Request, db, active=False, admin=False):
     if request.method not in ('GET', 'HEAD', 'OPTIONS') and not bearer:
         csrf = request.headers.get('x-csrf-token', '')
         import hmac
-        if (not csrf or not hmac.compare_digest(digest(csrf), session.csrf_hash)) and not native_json(request):
+        gui_origin = (gui and request.headers.get('origin') == config()['public_url']
+                      and request.headers.get('sec-fetch-site') != 'cross-site'
+                      and request.headers.get('content-type', '').split(';')[0].lower() == 'application/json')
+        if (not csrf or not hmac.compare_digest(digest(csrf), session.csrf_hash)) and not native_json(request) and not gui_origin:
             raise HTTPException(403, 'CSRF 검증 실패. 다시 로그인하세요.')
     if admin and not user.admin:
         raise HTTPException(403, '관리자 권한이 필요합니다.')
