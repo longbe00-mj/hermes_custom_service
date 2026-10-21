@@ -152,11 +152,24 @@ class Contracts(unittest.TestCase):
         _, _, p = self.user()
         self.client.cookies.set(accounts.AT_COOKIE, p['access_token'])
         del self.client.headers['Origin']
-        r = self.client.post('/api/auth/ws-ticket', json={})
+        self.client.headers.update({'Sec-Fetch-Site': 'none', 'Sec-Fetch-Mode': 'no-cors',
+                                    'Sec-Fetch-Dest': 'empty', 'Content-Type': 'application/json'})
+        r = self.client.post('/api/auth/ws-ticket')
         self.assertEqual(r.status_code, 200)
         self.assertIn('ticket', r.json())
         r = self.client.post('/auth/logout', json={})
         self.assertEqual(r.status_code, 200)
+
+    def test_browser_cross_site_cookie_ticket_request_is_denied(self):
+        _, _, p = self.user()
+        self.client.cookies.set(accounts.AT_COOKIE, p['access_token'])
+        del self.client.headers['Origin']
+        for site in ('cross-site', 'same-site'):
+            r = self.client.post('/api/auth/ws-ticket', json={}, headers={'Sec-Fetch-Site': site})
+            self.assertEqual(r.status_code, 403)
+        r = self.client.post('/api/auth/ws-ticket', headers={'Sec-Fetch-Site': 'none',
+                                                          'Content-Type': 'text/plain'})
+        self.assertEqual(r.status_code, 403)
 
     def test_runtime_credential_cannot_validate_another_user(self):
         a, _, pa = self.user()
@@ -232,6 +245,24 @@ class Contracts(unittest.TestCase):
         with self.assertRaises(WebSocketDisconnect):
             with self.client.websocket_connect('/api/ws?ticket=bad'):
                 pass
+
+    def test_desktop_websocket_origin_requires_valid_ticket(self):
+        from fastapi import HTTPException
+        from starlette.websockets import WebSocketDisconnect
+        from unittest.mock import AsyncMock
+        _, _, p = self.user()
+        self.client.cookies.set(accounts.AT_COOKIE, p['access_token'])
+        for origin, valid_ticket, reaches_runtime in (
+            ('file://', True, True), ('file://', False, False),
+            ('https://evil.invalid', True, False),
+        ):
+            ticket = self.client.post('/api/auth/ws-ticket', json={}).json()['ticket'] if valid_ticket else 'bad'
+            runtime = AsyncMock(side_effect=HTTPException(409, 'test runtime stopped'))
+            with patch('service.proxy.runtime_base', runtime):
+                with self.assertRaises(WebSocketDisconnect):
+                    with self.client.websocket_connect('/api/ws?ticket=' + ticket, headers={'Origin': origin}):
+                        pass
+            self.assertEqual(runtime.await_count, int(reaches_runtime))
 
     def test_parallel_reservations_cannot_bypass_limit(self):
         import concurrent.futures

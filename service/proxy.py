@@ -3,6 +3,7 @@ import asyncio
 import datetime as dt
 import hmac
 import json
+import logging
 
 import httpx
 import websockets
@@ -133,7 +134,10 @@ async def websocket_proxy(socket: WebSocket, path: str):
         await socket.close(code=1008)
         return
     origin = socket.headers.get('origin')
-    if origin and origin != config()['public_url']:
+    # Packaged Electron renders from file://. It still needs the same short-lived,
+    # one-use ticket, issued only to an authenticated session, as browser clients.
+    if origin and origin not in (config()['public_url'], 'file://'):
+        logging.getLogger(__name__).warning('Rejected WebSocket origin: %r', origin)
         await socket.close(code=1008)
         return
     try:

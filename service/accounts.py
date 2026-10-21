@@ -102,8 +102,11 @@ def require(request: Request, db, active=False, admin=False, gui=False):
 
 
 def native_json(request):
-    """Electron main's cookie transport has no Origin; cross-origin browser JSON requires CORS."""
-    return (not request.headers.get('origin') and not request.headers.get('sec-fetch-site')
+    """Electron uses no Origin and Chromium's non-document Fetch Metadata (`none`).
+
+    Browser cross-site JSON still requires CORS; navigations cannot supply JSON.
+    """
+    return (not request.headers.get('origin') and request.headers.get('sec-fetch-site', '') in ('', 'none')
             and request.headers.get('content-type', '').split(';')[0].lower() == 'application/json')
 
 
